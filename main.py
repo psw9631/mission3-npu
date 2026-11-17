@@ -7,6 +7,13 @@ REPEAT_COUNT = 10
 FILTER_LABELS = {"cross": "Cross", "x": "X"}
 EXPECTED_LABELS = {"+": "Cross", "x": "X"}
 
+def normalize_label(raw_label, labels):
+    """주어진 JSON 라벨을 표준 라벨로 변환한다."""
+    if not isinstance(raw_label, str) or raw_label not in labels:
+        raise ValueError(f"알 수 없는 라벨 ({raw_label!r})")
+    return labels[raw_label]
+
+
 def mac(pattern, filter_data):
     score = 0.0
 
@@ -108,11 +115,12 @@ def run_user_mode():
 
     repeat_count = REPEAT_COUNT
 
+    # 입력 완료 후, 두 필터를 채점하는 반복 구간을 측정한다.
     start = perf_counter()
     for _ in range(repeat_count):
         score_a = mac(user_pattern, filter_a)
         score_b = mac(user_pattern, filter_b)
-    end = perf_counter()
+    end = perf_counter()  # 판정과 출력 전에 측정을 끝낸다.
 
     average_ms = (end - start) * 1000 / repeat_count
 
@@ -154,6 +162,7 @@ def print_mac_benchmark(sizes=(3, 5, 13, 25)):
         flat_pattern = flatten_matrix(pattern)
         flat_filter = flatten_matrix(cross_filter)
 
+        # 배열 준비가 끝난 뒤 각 MAC의 반복 구간만 측정한다.
         start = perf_counter()
         for _ in range(repeat_count):
             score_2d = mac(pattern, cross_filter)
@@ -206,7 +215,8 @@ def run_json_mode():
 
             selected_filters = filters[filter_key]
             standard_filters = {
-                label: selected_filters[key] for key, label in FILTER_LABELS.items()
+                normalize_label(key, FILTER_LABELS): selected_filters[key]
+                for key in FILTER_LABELS
             }
             input_pattern = pattern_data["input"]
         except (ValueError, KeyError, TypeError) as error:
@@ -243,12 +253,12 @@ def run_json_mode():
 
         raw_expected = pattern_data.get("expected")
 
-        if not isinstance(raw_expected, str) or raw_expected not in EXPECTED_LABELS:
+        try:
+            expected = normalize_label(raw_expected, EXPECTED_LABELS)
+        except ValueError:
             failures[pattern_key] = f"잘못된 expected 값 ({raw_expected!r})"
             print(f"{pattern_key}: FAIL ({failures[pattern_key]})")
             continue
-
-        expected = EXPECTED_LABELS[raw_expected]
 
         if predicted == expected:
             status = "PASS"
